@@ -30,3 +30,5 @@ export async function POST(request: Request) {
   // 4. Simula la respuesta de IDAnalyzer
   return NextResponse.json({ offer_url: '/api/credentialOffer' });
 }
+// crear una funcionn donde otro usuario pueda consultar tu edad y tú le des permiso
+// consultas cruzadas entre contratos, quién ha votado(quien contrato identidad digital) y por quién (contrato app electoral)?
