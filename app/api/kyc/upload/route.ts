@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export const config = {
-  api: { bodyParser: false }, // deshabilita el parser integrado
+  api: { bodyParser: false }, 
 };
 
 export async function POST(request: Request) {
@@ -27,8 +27,5 @@ export async function POST(request: Request) {
     }
   }
 
-  // 4. Simula la respuesta de IDAnalyzer
   return NextResponse.json({ offer_url: '/api/credentialOffer' });
 }
-// crear una funcionn donde otro usuario pueda consultar tu edad y tú le des permiso
-// consultas cruzadas entre contratos, quién ha votado(quien contrato identidad digital) y por quién (contrato app electoral)?

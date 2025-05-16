@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "SSI Wallet Demo",
+  title: "Wallet Demo",
   description: "Demo de registro y login con SSI",
 };
 
