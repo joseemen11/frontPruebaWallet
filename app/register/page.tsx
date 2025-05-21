@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
+import * as snarkjs from "snarkjs";
+
 import { Wallet } from "@ethersproject/wallet";
 const mockResponse = {
   data: {
@@ -86,6 +88,79 @@ export default function Register() {
   const { did, credentialData } = mockResponse.data;
   const [streamId, setStreamId] = useState<string>();
   const [msg, setMsg] = useState<string>("Listo para guardar en Ceramic");
+  const [dni, setDni] = useState("");
+  const mockVC = mockResponse.data.credentialData.vc;
+  const [age, setAge] = useState<number>();
+  const [verifMsg, setVerifMsg] = useState<string>();
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<{
+    fullName: string;
+    streamId: string;
+  } | null>();
+
+  async function handleSearch() {
+    const { data } = await axios.post("http://localhost:3001/kyc/find", {
+      identifier: dni,
+    });
+    setResult(data.ok ? data : null);
+  }
+
+  useEffect(() => {
+    if (!mockVC) return;
+    const dobSeconds = mockVC.credentialSubject.dateOfBirth; // p.ej. 929059200
+    const nowSeconds = Date.now() / 1000;
+    const diffYears = Math.floor(
+      (nowSeconds - dobSeconds) / (365.25 * 24 * 60 * 60)
+    );
+    setAge(diffYears);
+  }, [mockVC]);
+
+  async function handleProve() {
+    if (age === undefined) return;
+
+    setIsLoading(true);
+    setVerifMsg("Generando prueba zk…");
+
+    try {
+      // Verificamos si los archivos existen con una petición de prueba
+      try {
+        await fetch("/age.wasm").then((res) => {
+          if (!res.ok)
+            throw new Error(`Error cargando age.wasm: ${res.status}`);
+        });
+        await fetch("/age_final.zkey").then((res) => {
+          if (!res.ok)
+            throw new Error(`Error cargando age_final.zkey: ${res.status}`);
+        });
+      } catch (error: any) {
+        throw new Error(`Error al cargar archivos ZK: ${error.message}`);
+      }
+
+      const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+        { age },
+        "/age.wasm",
+        "/age_final.zkey"
+      );
+
+      setVerifMsg("Enviando prueba al servidor…");
+      const resp = await axios.post("/api/verify", { proof, publicSignals });
+
+      if (!resp.data) {
+        throw new Error("Respuesta vacía del servidor");
+      }
+      console.log("🚀 respuesta /api/verify:", resp.data);
+      setVerifMsg(
+        resp.data.ok
+          ? `OK, tu edad calculada es ${age} y eres ≥18`
+          : "Prueba inválida"
+      );
+    } catch (e: any) {
+      console.error("Error ZK completo:", e);
+      setVerifMsg("Error zk: " + e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function handleSaveCeramic() {
     try {
@@ -113,10 +188,10 @@ export default function Register() {
       });
 
       setStreamId(res.data.streamId);
-      setMsg("✅ Stream ID recibido. ¡VC guardada en Ceramic!");
+      setMsg("Stream ID recibido. ¡VC guardada en Ceramic!");
     } catch (e: any) {
       console.error(e);
-      setMsg("❌ Error: " + e.message);
+      setMsg("Error: " + e.message);
     }
   }
 
@@ -157,6 +232,39 @@ export default function Register() {
           </code>
         </div>
       )}
+
+      <input
+        value={dni}
+        onChange={(e) => setDni(e.target.value)}
+        placeholder="Nro. de carnet"
+      />
+      <button onClick={handleSearch}>Buscar</button>
+      {result && (
+        <p className="mt-2">
+          Nombre: <strong>{result.fullName}</strong>
+          <br />
+          Stream: {result.streamId}
+        </p>
+      )}
+
+      <h1 className="text-xl font-bold">Demo ZK a partir del VC</h1>
+
+      <div>
+        <p>
+          Fecha de nacimiento (epoch): {mockVC?.credentialSubject.dateOfBirth}
+        </p>
+        <p>Edad calculada: {age ?? "…"}</p>
+
+        <button
+          onClick={handleProve}
+          disabled={age === undefined}
+          className="mt-2 bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Demostrar ≥18 con zk
+        </button>
+
+        {verifMsg && <p className="mt-2">{verifMsg}</p>}
+      </div>
     </main>
   );
 }
